@@ -29,17 +29,18 @@ def _buildService(clientID, cred):
 def _getCred(clientID):
     cred = None
     savedCredFname = _getCredFname(clientID)
-    if not os.path.isfile(savedCredFname):
-        secretFname = _getSecretFname(clientID)
-        flow = InstalledAppFlow.from_client_secrets_file(secretFname, PHOTOS_SCOPE)
-        cred = flow.run_local_server()
-        with open(savedCredFname, 'wb') as token:
-            pkl.dump(cred, token)
-    else:
+    if os.path.isfile(savedCredFname):
         with open(savedCredFname, 'rb') as token:
             cred = pkl.load(token)
-    if not cred.valid:
-        cred.refresh(Request())
+    if not cred and cred.valid:
+        if cred.valid and cred.expired and cred.refresh_token:
+            cred.refresh(Request())
+        else:
+            secretFname = _getSecretFname(clientID)
+            flow = InstalledAppFlow.from_client_secrets_file(secretFname, PHOTOS_SCOPE)
+            cred = flow.run_local_server()
+        with open(savedCredFname, 'wb') as token:
+            pkl.dump(cred, token)
     return cred
 
 def _getCredFname(clienID):
