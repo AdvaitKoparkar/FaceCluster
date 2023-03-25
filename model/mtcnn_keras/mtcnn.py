@@ -110,11 +110,13 @@ class MTCNN(object):
 
     def detect_faces(self, img):
         scales = self._generate_scales(img)
-        import pdb; pdb.set_trace()
         pnet_output = self._generate_proposals_PNET(img, scales)
-        self._visualize(img, *pnet_output)
-        # rnet_output = self._refine_proposals_RNET(img, pnet_output)
-
+        # self._visualize(img, *pnet_output)
+        rnet_output = self._refine_proposals_RNET(img, pnet_output)
+        # self._visualize(img, *rnet_output)
+        import pdb; pdb.set_trace()
+        onet_output = self._describe_features_ONET(img, rnet_output)
+        
     def _generate_scales(self, img):
         height, width, channels = img.shape
         
@@ -204,22 +206,83 @@ class MTCNN(object):
 
         # convert to squares        
         face_locs = _rect2square(face_locs)
+
+        # remove invalid coords
+        face_locs[:, 0] = np.maximum(face_locs[:, 0], 0)
+        face_locs[:, 1] = np.maximum(face_locs[:, 1], 0)
+        face_locs[:, 2] = np.minimum(face_locs[:, 2], origin_dim[0]-1)
+        face_locs[:, 3] = np.minimum(face_locs[:, 3], origin_dim[1]-1)
+        invalid_idx = np.logical_or(
+            face_locs[:, 0] >= face_locs[:, 2], # r1 > r2
+            face_locs[:, 1] >= face_locs[:, 3], # c1 > c2
+        )
+        scores = scores[np.logical_not(invalid_idx)]
+        face_locs = face_locs[np.logical_not(invalid_idx), :]
         
         # non-maximum supression
         face_locs, scores = self._NMS(face_locs, scores, **self.config["PNet_prediction_NMS_config"])
-
         return face_locs, scores
 
     def _refine_proposals_RNET(self, img, pnet_output):
         coords_map, face_probs = pnet_output
         num_proposals = len(coords_map)
+        origin_h, origin_w, _ = img.shape
 
         rnet_inputs = []
         for proposal_idx in range(num_proposals):
-            coords_map_idx = coords_map[proposal_idx]
-            cropped_img    = img[coords_map_idx[0]:coords_map_idx[1], coords_map_idx[2]:coords_map_idx[3]]
-            cropped_img    = self.config["image_resizing_fn"](image=img, output_shape=(24, 24)) # replace with config
-            rnet_inputs.append(cropped_img)
+            coords_map_idx = coords_map[proposal_idx].astype(np.int32)
+            cropped_img    = img[coords_map_idx[0]:coords_map_idx[2], coords_map_idx[1]:coords_map_idx[3]]
+            cropped_img    = self.config["image_resizing_fn"](image=cropped_img, output_shape=(24, 24, 3)) # replace with config
+            rnet_inputs.append(cropped_img[None, :, :, :])
+        rnet_inputs = np.concatenate(rnet_inputs, axis=0)
+        face_probs_map, coords_map_delta = self.RNet.predict(rnet_inputs)
+
+        face_probs_map, coords_map = self._RNet_post_process(face_probs_map, coords_map_delta, coords_map, (origin_h, origin_w), 0.1) # replace with config        
+        return face_probs_map, coords_map
+
+    def _RNet_post_process(self, face_probs_map, coords_map_delta, coords_map, original_dims, threshold):
+        face_prob = face_probs_map[:,1]
+        pick_idx  = face_prob > threshold
+        coords_map = coords_map[pick_idx, :]
+        scores = face_prob[pick_idx]
+        coords_map_delta = coords_map_delta[pick_idx, :]
+        
+        width  = coords_map[:, 3] - coords_map[:, 1]
+        height = coords_map[:, 2] - coords_map[:, 0]
+        
+        coords_map_rnet = coords_map
+        coords_map_rnet[:, 0] = coords_map_rnet[:, 0] + coords_map_delta[:, 0] * height
+        coords_map_rnet[:, 2] = coords_map_rnet[:, 2] + coords_map_delta[:, 2] * height
+        coords_map_rnet[:, 1] = coords_map_rnet[:, 1] + coords_map_delta[:, 1] * width
+        coords_map_rnet[:, 3] = coords_map_rnet[:, 3] + coords_map_delta[:, 3] * width
+        
+        coords_map_rnet = _rect2square(coords_map_rnet)
+
+        # remove invalid coords
+        coords_map_rnet[:, 0] = np.maximum(coords_map_rnet[:, 0], 0)
+        coords_map_rnet[:, 1] = np.maximum(coords_map_rnet[:, 1], 0)
+        coords_map_rnet[:, 2] = np.minimum(coords_map_rnet[:, 2], original_dims[0]-1)
+        coords_map_rnet[:, 3] = np.minimum(coords_map_rnet[:, 3], original_dims[1]-1)
+        invalid_idx = np.logical_or(
+            coords_map_rnet[:, 0] >= coords_map_rnet[:, 2], # r1 > r2
+            coords_map_rnet[:, 1] >= coords_map_rnet[:, 3], # c1 > c2
+        )
+        scores = scores[np.logical_not(invalid_idx)]
+        coords_map_rnet = coords_map_rnet[np.logical_not(invalid_idx), :]
+
+        face_locs, scores = self._NMS(coords_map_rnet, scores, 0.3) # replace with config
+        return face_locs, scores
+
+    def _describe_features_ONET(self, img, rnet_output):
+        coords_map, face_probs = rnet_output
+        num_proposals = len(coords_map)
+
+        for proposal_idx in range(num_proposals):
+            coords_map_idx = coords_map[proposal_idx].astype(np.int32)
+            cropped_img    = img[coords_map_idx[0]:coords_map_idx[2], coords_map_idx[1]:coords_map_idx[3]]
+            cropped_img    = self.config["image_resizing_fn"](image=cropped_img, output_shape=(48, 48, 3)) # replace with config
+            
+
 
     def _NMS(self, boxes, scores, threshold=0.6):
         # if there are no boxes / scores, return an empty list

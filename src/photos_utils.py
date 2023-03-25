@@ -4,16 +4,18 @@ from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import Flow, InstalledAppFlow
 
+from config.fetcher_config import FETCHER_CONFIG
+
 PHOTOS_API_NAME = 'photoslibrary'
 PHOTOS_API_VERSION = 'v1'
 PHOTOS_SCOPE = ['https://www.googleapis.com/auth/photoslibrary',
                 'https://www.googleapis.com/auth/photoslibrary.sharing']
-PHOTOS_CRED_FOLDER = os.path.join('tokens', 'creds')
-PHOTOS_CLIENT_FOLDER = os.path.join('tokens', 'clients')
+PHOTOS_CRED_FOLDER = os.path.join(FETCHER_CONFIG['token_path'], 'creds')
+PHOTOS_CLIENT_FOLDER = os.path.join(FETCHER_CONFIG['token_path'], 'clients')
 
 PHOTOS_CLIENT_IDS = {
     'ak': {
-        'name': 'client_secret_842145595125-6ufefnpt4ctlclms5ga97bo3hku4pah1.apps.googleusercontent.com'
+        'name': 'client_secret_842145595125-nbsn07ve4oikip40nfkr673fub8eb2gh.apps.googleusercontent.com'
     },
 }
 
@@ -32,8 +34,8 @@ def _getCred(clientID):
     if os.path.isfile(savedCredFname):
         with open(savedCredFname, 'rb') as token:
             cred = pkl.load(token)
-    if not cred and cred.valid:
-        if cred.valid and cred.expired and cred.refresh_token:
+    if not cred or not cred.valid:
+        if cred is not None and cred.valid and cred.expired and cred.refresh_token:
             cred.refresh(Request())
         else:
             secretFname = _getSecretFname(clientID)

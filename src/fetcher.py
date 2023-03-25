@@ -3,7 +3,7 @@ from io import BytesIO
 from imageio import imread
 from cachetools import LFUCache, TTLCache
 
-from .photos_utils import photosCreateService
+from src.photos_utils import photosCreateService
 
 class Fetcher(object):
     def __init__(self, config):
@@ -23,12 +23,13 @@ class Fetcher(object):
                 nextPageToken = response.get("nextPageToken")
                 if not nextPageToken:
                     break
+                request['pageToken'] = nextPageToken
 
         return fetchedItems
 
     def updateMediaItem(self, mediaIds):
         updatedItems = []
-        for clienID in self.config.get("clientIDs"):
+        for clientID in self.config.get("clientIDs"):
             service = photosCreateService(clientID)
             response = service.mediaItems.batchGet(mediaIds)
             mediaItems = response.get("mediaItems")
