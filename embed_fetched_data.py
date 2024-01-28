@@ -20,8 +20,7 @@ if __name__ == '__main__':
     fetcher = Fetcher(FETCHER_CONFIG)
     embedding_model = get_embedding_model(COMMON_CONFIG["embedding_model"])
     vector_db       = EmbeddingIndex(
-                        dimension=COMMON_CONFIG["embedding_model"]["dimension"], 
-                        index_params= {'index_type': "HNSWFlat"},
+                        **COMMON_CONFIG['ann_config']
                     )
 
     # load db

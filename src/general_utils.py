@@ -1,5 +1,7 @@
 import cv2
+import sqlite3
 import numpy as np
+from sqlitedict import SqliteDict
 
 def crop(image : np.ndarray, crop : np.ndarray ) -> np.ndarray :
     return image[crop[1]:crop[1]+crop[3], crop[0]:crop[0] + crop[2]]
@@ -39,3 +41,46 @@ def draw_rectangle(image : np.ndarray , box : np.ndarray, text : str , **cfg) ->
         font, font_scale, color, thickness)
 
     return result_image
+
+class AssistedLabeler(object):
+    def __init__(self, cfg : dict ):
+        self.face_emb       = SqliteDict(**cfg['face_emb'])
+        self.face_locs      = SqliteDict(**cfg['face_locs'])
+        self.media_items    = SqliteDict(**cfg['media_items'])
+        self.person_db      = cfg['person_db']
+        self.vector_db      = cfg['vector_db']
+
+    def check_status(self, ) -> dict :
+        person_status = self._get_person_status()
+        return person_status
+
+    ## helpers
+    def _get_person_status(self, ):
+        status = {}
+        connection = sqlite3.connect(self.person_db)
+        cursor = connection.cursor()
+
+        # TODO: make this part of COMMON_CONFIG
+        person_table_name = "all_persons"
+        person_id_col_name = "personId"
+
+        # get number of people labelled Uknown
+        cursor.execute(f'''
+            SELECT COUNT(*) FROM {person_table_name} WHERE {person_id_col_name} = ?
+        ''', ('Unknown',))
+        status['unkown_count'] = cursor.fetchone()[0]
+
+        # get total number of faces
+        cursor.execute(f'''
+            SELECT COUNT(*) FROM {person_table_name}
+        ''')
+        status['total_face_instances'] = cursor.fetchone()[0]
+
+        # get distinct
+        cursor.execute(f'''
+            SELECT COUNT(DISTINCT {person_id_col_name}) FROM {person_table_name}
+        ''')
+        status['total_persons'] = cursor.fetchone()[0]
+
+        connection.close()
+        return status

@@ -1,0 +1,4 @@
+DB_PATHS:
+  DB_PATH: "/Users/advaitkoparkar/Documents/projects/FaceCluster/data/photos_db_v20231217/FaceClusterSQLDB.db"
+  PERSON_DB: "/Users/advaitkoparkar/Documents/projects/FaceCluster/data/photos_db_v20231217/Persons.sqlite"
+  VECTOR_DB: "/Users/advaitkoparkar/Documents/projects/FaceCluster/data/photos_db_v20231217/FacenetInception_v2"

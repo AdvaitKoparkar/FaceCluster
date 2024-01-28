@@ -1,6 +1,7 @@
 import os
 
 PROJECTS_FOLDER = r"/Users/advaitkoparkar/Documents/projects"
+_EMBEDDING_DIMENSION = 128
 COMMON_CONFIG = \
 {
     "root": os.path.join(f"{PROJECTS_FOLDER}", "FaceCluster"),
@@ -8,7 +9,14 @@ COMMON_CONFIG = \
     "face_confidence_threshold": 0.98,
     "embedding_model": {
         "name": "FacenetInception_v2",
-        "dimension": 128,
+        "dimension": _EMBEDDING_DIMENSION,
         "wts": os.path.join(PROJECTS_FOLDER, "FaceCluster", "src", "facenet_inception.h5"),
     },
+    "ann_config": {
+        "dimension": _EMBEDDING_DIMENSION,
+        "index_params": {
+            "index_type": "HNSWFlat",
+        }
+    },
+    "default_labelling_config": os.path.join(f"{PROJECTS_FOLDER}", "FaceCluster", "config", "labelling_config.yml"),
 }
