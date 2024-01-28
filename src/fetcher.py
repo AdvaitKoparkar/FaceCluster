@@ -14,17 +14,16 @@ class Fetcher(object):
     def __init__(self, config):
         self.config = config
 
-    def fetchMetaData(self, request : dict) -> list :
+    def fetchMediaItems(self, request : dict) -> list :
         '''
-            returns list of mediaItems from Google Photos API
+            returns list of mediaItems with Google Photos API
         '''
         fetchedItems = []
-        logging.debug('fetching request')
+        logger.debug('fetching request')
 
         for clientID in self.config.get("clientIDs"):
-            logging.debug(f'connecting to {clientID} photos')
+            logger.debug(f'connecting to {clientID} photos')
             service = photosCreateService(clientID)
-
             while True:
                 response = service.mediaItems().search(body=request).execute()
                 mediaItems = response.get("mediaItems")
@@ -39,14 +38,63 @@ class Fetcher(object):
         logger.debug(f'fetched {len(fetchedItems)} mediaItems')
         return fetchedItems
 
-    def fetchPhoto(self, mediaItem : dict ) -> np.ndarray :
+    def fetchAlbums(self, ) -> list :
+        '''
+            return albums & sharedAlbums from Google Photos API
+        '''
+        fetchedAlbums = []
+        logger.debug('fetching request')
+
+        for clientID in self.config.get("clientIDs"):
+            logger.debug(f'connecting to {clientID} photos')
+            service = photosCreateService(clientID)
+            nextPageToken = ''
+            while True:
+                response = service.albums().list(pageToken=nextPageToken).execute()
+                albums = response.get('albums')
+                if albums is not None:
+                    fetchedAlbums += albums
+        
+                nextPageToken = response.get("nextPageToken")
+                if not nextPageToken:
+                    break
+            
+            nextPageToken = ''
+            while True:
+                response = service.sharedAlbums().list(pageToken=nextPageToken).execute()
+                albums = response.get('sharedAlbums')
+                if albums is not None:
+                    fetchedAlbums += albums
+        
+                nextPageToken = response.get("nextPageToken")
+                if not nextPageToken:
+                    break
+        
+        logger.debug(f'fetched {len(fetchedAlbums)} albums')
+        return fetchedAlbums
+
+    def fetchPhoto(self, mediaId : str ) -> np.ndarray :
         '''
             fetch photo (pixels) using mediaItem
         '''
-        mediaId = mediaItem['id']
-        baseUrl = mediaItem['baseUrl']
-        logger.info(f'fetching {mediaId} from {baseUrl}')
+        logger.debug(f'searching for requested mediaId')
 
+        # search which id has the mediaItem
+        mediaItem = None
+        for clientID in self.config.get("clientIDs"):
+            logger.debug(f'connecting to {clientID} photos')
+            service = photosCreateService(clientID)
+            mediaItem = service.mediaItems().get(mediaItemId=mediaId).execute()
+            if mediaItem.get('id') == mediaId:
+                logger.debug(f'found media item in {clientID}')
+                break
+            else:
+                mediaItem = None
+
+        if mediaItem is None:
+            raise Exception(f'requested mediaId not found')
+
+        baseUrl = mediaItem['baseUrl']
         response = requests.get(baseUrl)
         retryAttempts = 0
         while response.ok is False and retryAttempts < self.config.get("maxRetryAttempts"):
@@ -61,8 +109,6 @@ class Fetcher(object):
             raise Exception(f'could not find media item {mediaId}')
 
         img = imread(BytesIO(response.content))
-        self.mediaIdCache[mediaId] = img
-        self.mediaItemCache[baseUrl] = img
         return img
 
     # helpers
@@ -70,7 +116,7 @@ class Fetcher(object):
         updatedItems = []
         for clientID in self.config.get("clientIDs"):
             service = photosCreateService(clientID)
-            response = service.mediaItems.batchGet(mediaIds)
+            response = service.mediaItems().batchGet(mediaIds)
             mediaItems = response.get("mediaItems")
             updatedItems += mediaItems
         return updatedItems
