@@ -24,6 +24,7 @@ if __name__ == '__main__':
         faces = face_extractor.get_faces(img)
         for face in faces:
             id = mediaId + '_' + face['id']
+            face['media_id'] = mediaId
             face_locs[id] = face
         # checkpoint
         face_locs.commit()

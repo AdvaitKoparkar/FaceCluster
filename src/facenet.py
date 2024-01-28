@@ -203,6 +203,12 @@ def FacenetInception(path : str) -> tf.keras.Model :
     model.load_weights(path)
     return model
 
+def get_embedding_model(model_cfg : dict ) -> tf.keras.Model :
+    if model_cfg['name'] == "FacenetInception_v2":
+        return FacenetInception(model_cfg['wts'])
+    else:
+        raise NotImplementedError
+
 if __name__ == '__main__':
     import numpy as np
     model = FacenetInception('facenet_inception.h5')
