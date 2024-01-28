@@ -1,3 +1,4 @@
 data/*
 tokens/*
+__pycache__/*
 *.h5
