@@ -42,6 +42,9 @@ def draw_rectangle(image : np.ndarray , box : np.ndarray, text : str , **cfg) ->
 
     return result_image
 
+# TODO: 
+# https://qsl.robinbay.com/
+# https://stackoverflow.com/questions/54921711/interactive-labeling-of-images-in-jupyter-notebook
 class AssistedLabeler(object):
     def __init__(self, cfg : dict ):
         self.face_emb       = SqliteDict(**cfg['face_emb'])

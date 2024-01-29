@@ -61,7 +61,7 @@ if __name__ == '__main__':
 
         # preprocess image
         box = face_locs[face_loc]['loc']
-        face_cropped = preprocess(crop(img, box), rows=160, cols=160)
+        face_cropped = preprocess(crop(img, box), rows=COMMON_CONFIG['face_shape'][0], cols=COMMON_CONFIG['face_shape'][1])
 
         # find emb
         emb = embedding_model.predict(face_cropped[None,...], verbose=0)
