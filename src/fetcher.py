@@ -3,6 +3,7 @@ import requests
 import numpy as np
 from io import BytesIO
 from imageio import imread
+from googleapiclient.errors import HttpError
 from src.photos_utils import photosCreateService
 
 logger = logging.getLogger(__name__)
@@ -84,15 +85,16 @@ class Fetcher(object):
         for clientID in self.config.get("clientIDs"):
             logger.debug(f'connecting to {clientID} photos')
             service = photosCreateService(clientID)
-            mediaItem = service.mediaItems().get(mediaItemId=mediaId).execute()
-            if mediaItem.get('id') == mediaId:
-                logger.debug(f'found media item in {clientID}')
-                break
-            else:
-                mediaItem = None
-
-        if mediaItem is None:
-            raise Exception(f'requested mediaId not found')
+            try:
+                mediaItem = service.mediaItems().get(mediaItemId=mediaId).execute()
+                if mediaItem.get('id') == mediaId:
+                    logger.debug(f'found media item in {clientID}')
+                    break
+                else:
+                    mediaItem = None
+            except HttpError:
+                logger.error(f'{mediaId} not found')
+                continue
 
         baseUrl = mediaItem['baseUrl']
         response = requests.get(baseUrl)

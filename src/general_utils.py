@@ -1,7 +1,12 @@
 import cv2
+import logging
 import sqlite3
 import numpy as np
 from sqlitedict import SqliteDict
+import matplotlib.pyplot as plt
+from .fetcher import Fetcher
+
+logger = logging.getLogger(__name__)
 
 def crop(image : np.ndarray, crop : np.ndarray ) -> np.ndarray :
     return image[crop[1]:crop[1]+crop[3], crop[0]:crop[0] + crop[2]]
@@ -42,9 +47,6 @@ def draw_rectangle(image : np.ndarray , box : np.ndarray, text : str , **cfg) ->
 
     return result_image
 
-# TODO: 
-# https://qsl.robinbay.com/
-# https://stackoverflow.com/questions/54921711/interactive-labeling-of-images-in-jupyter-notebook
 class AssistedLabeler(object):
     def __init__(self, cfg : dict ):
         self.face_emb       = SqliteDict(**cfg['face_emb'])
@@ -57,6 +59,58 @@ class AssistedLabeler(object):
         person_status = self._get_person_status()
         return person_status
 
+    def get_unknown(self, n = 1) -> list :
+        unknown_faces = []
+        connection = sqlite3.connect(self.person_db)
+        cursor = connection.cursor()
+
+        # TODO: make this part of COMMON_CONFIG
+        person_table_name = "all_persons"
+        person_id_col_name = "personId"
+
+        # get n unlabelled faces
+        cursor.execute(f'''
+            SELECT * FROM {person_table_name} WHERE {person_id_col_name} = ?
+            ORDER BY RANDOM() LIMIT ?
+        ''', ('Unknown', n))
+        
+        selected_rows = cursor.fetchall()
+        for idx, row in enumerate(selected_rows):
+            id, mediaId, personId = row
+            unknown_faces.append({
+                'id': id,
+                'mediaId': mediaId,
+                'personId': personId,
+            })
+
+        connection.close()
+        return unknown_faces
+
+    def view_face(self, face : list, fetcher : Fetcher ) -> None :
+        fig, ax = plt.subplots(1, 1, squeeze=True)
+        img = self._get_face(face, fetcher)
+        ax.imshow(img)
+        
+        plt.show()
+        
+    def set_identity(self, faces : list ) -> dict :
+        connection = sqlite3.connect(self.person_db)
+        cursor = connection.cursor()
+
+        # TODO: make this part of COMMON_CONFIG
+        person_table_name = "all_persons"
+
+        # add person info to db
+        for face in faces:
+            logger.debug(f'setting {face}')
+            cursor.execute(f'''
+            UPDATE {person_table_name} SET mediaId=?, personId=? WHERE id=?
+        ''', (face['mediaId'], face['personId'], face['id']))
+
+        connection.commit()
+        connection.close()
+        return self._get_person_status()
+        
     ## helpers
     def _get_person_status(self, ):
         status = {}
@@ -86,4 +140,11 @@ class AssistedLabeler(object):
         status['total_persons'] = cursor.fetchone()[0]
 
         connection.close()
+        logger.debug(status)
         return status
+    
+    def _get_face(self, face : dict , fetcher : Fetcher ) -> np.ndarray :
+        img = fetcher.fetchPhoto(face['mediaId'])
+        face_loc = self.face_locs[face['id']]
+        img = draw_rectangle(img, face_loc['loc'], face['personId'])
+        return img

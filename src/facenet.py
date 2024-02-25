@@ -1,6 +1,9 @@
 # trained weights from https://github.com/R4j4n/Face-recognition-Using-Facenet-On-Tensorflow-2.X/tree/master
+import logging
 import tensorflow as tf
 from tensorflow.keras.layers import Conv2D, Activation, Input, MaxPooling2D, Dense, Dropout, BatchNormalization, Concatenate, GlobalAveragePooling2D
+
+logger = logging.getLogger(__name__)
 
 class ConvBlock(tf.keras.Model):
     def __init__(self, filters : int , kernel : int , strides : int , padding : str , use_bias : bool , name : str ) -> None :
@@ -199,7 +202,8 @@ def FacenetInception(path : str) -> tf.keras.Model :
         Dense(128, use_bias=False, name='Bottleneck'),
         BatchNormalization(momentum=0.995, epsilon=0.001, scale=False, name='Bottleneck_BatchNorm'),
     ], name='facenet')
-
+    logger.debug(model.summary())
+    logger.debug(f'loading weights from {path}')
     model.load_weights(path)
     return model
 
