@@ -8,7 +8,9 @@ from .fetcher import Fetcher
 
 logger = logging.getLogger(__name__)
 
-def crop(image : np.ndarray, crop : np.ndarray ) -> np.ndarray :
+def crop(image : np.ndarray, crop : np.ndarray, square = True ) -> np.ndarray :
+    if square:
+        crop = crop_center_square(crop)
     return image[crop[1]:crop[1]+crop[3], crop[0]:crop[0] + crop[2]]
 
 def preprocess(image : np.ndarray, **cfg) -> np.ndarray :
@@ -46,6 +48,15 @@ def draw_rectangle(image : np.ndarray , box : np.ndarray, text : str , **cfg) ->
         font, font_scale, color, thickness)
 
     return result_image
+
+def crop_center_square(crop):
+    x_topleft, y_topleft, width, height = crop
+    side_length = min(width, height)
+    center_x = x_topleft + width // 2
+    center_y = y_topleft + height // 2
+    square_x = center_x - side_length // 2
+    square_y = center_y - side_length // 2
+    return [square_x, square_y, side_length, side_length]
 
 class AssistedLabeler(object):
     def __init__(self, cfg : dict ):

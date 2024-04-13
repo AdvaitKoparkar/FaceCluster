@@ -3,21 +3,24 @@ sys.path.append('../embedding_indexer')
 
 import os
 import sqlite3
+import numpy as np
+import pickle as pkl
 from tqdm import tqdm
+import tensorflow as tf
 from src.fetcher import Fetcher
 from sqlitedict import SqliteDict
-from src.facenet import get_embedding_model
+from sklearn.preprocessing import Normalizer
 from src.general_utils import crop, preprocess
 from config.fetcher_config import FETCHER_CONFIG
 from config.common_config import COMMON_CONFIG
 from emb_utils import EmbeddingIndex
 
-VECTOR_DB_CHECKPOINT = os.path.join(COMMON_CONFIG["root"], "data/photos_db_v20231217/FacenetInception_v2")
+VECTOR_DB            = os.path.join(COMMON_CONFIG["root"], "data/photos_db_v20231217/FacenetInception_v2")
 
 if __name__ == '__main__':
     # utils
     fetcher = Fetcher(FETCHER_CONFIG)
-    embedding_model = get_embedding_model(COMMON_CONFIG["embedding_model"])
+    embedding_model = tf.keras.models.load_model(COMMON_CONFIG['embedding_model']['wts'], safe_mode=False)
     vector_db       = EmbeddingIndex(
                         **COMMON_CONFIG['ann_config']
                     )
@@ -41,6 +44,7 @@ if __name__ == '__main__':
         )
     ''')
 
+    embs, metadata = [], []
     for face_loc in tqdm(list(face_locs.keys())):
         # check if model is confident this is a person's face
         conf     = face_locs[face_loc]['score']
@@ -53,10 +57,12 @@ if __name__ == '__main__':
 
         # preprocess image
         box = face_locs[face_loc]['loc']
+        max_dim = max(box[2], box[3])
+        box[2], box[3] = max_dim, max_dim
         face_cropped = preprocess(crop(img, box), rows=COMMON_CONFIG['face_shape'][0], cols=COMMON_CONFIG['face_shape'][1])
 
         # find emb
-        emb = embedding_model.predict(face_cropped[None,...], verbose=0)
+        emb = embedding_model.predict(face_cropped[None,...], verbose=0).reshape((1, -1))
 
         # save embedding and assume unknown person
         is_present = cursor.execute(
@@ -76,17 +82,24 @@ if __name__ == '__main__':
         }
 
         # emb : face_loc
-        vector_db.add_embeddings(
-            embeddings=emb, 
-            metadata=[{
+        embs.append(emb)
+        metadata.append({
                 'id': face_loc,
-            }]
-        )
-    
+        })
+
         # checkpoint
-        vector_db.save_index(VECTOR_DB_CHECKPOINT)
         connection.commit()
         face_emb.commit()
+
+    embs = np.concatenate(embs, axis=0)
+    embs = Normalizer('l2').transform(embs)
+    vector_db.add_embeddings(
+        embeddings=embs, 
+        metadata=metadata,
+    )
+    vector_db.save_index(VECTOR_DB)
+    connection.commit()
+    face_emb.commit()
 
     media_items.close()
     face_locs.close()

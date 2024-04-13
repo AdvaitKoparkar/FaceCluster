@@ -1,4 +1,3 @@
-# trained weights from https://github.com/R4j4n/Face-recognition-Using-Facenet-On-Tensorflow-2.X/tree/master
 import logging
 import tensorflow as tf
 from tensorflow.keras.layers import Conv2D, Activation, Input, MaxPooling2D, Dense, Dropout, BatchNormalization, Concatenate, GlobalAveragePooling2D
@@ -47,7 +46,7 @@ class InceptionResnetBlock(tf.keras.Model):
                     for layer_idx, (filters, kernel, strides, padding, use_bias) in enumerate(branch)
                 ], name=f'{name}_Branch{branch_idx}')
             )
-
+        
         self.conv = Conv2D(dimension, 1, 1, 'same', use_bias=True, name=f'{name}_Conv2d_1x1')
         self.scale = scale
         self.activation = Activation('relu', name=f'{name}_Activation')
@@ -74,7 +73,7 @@ class ReductionBlock(tf.keras.Model):
                     for layer_idx, (filters, kernel, strides, padding, use_bias) in enumerate(branch)
                 ], name=f'{name}_Branch{branch_idx}')
             )
-
+        
         if pool is not None:
             self.branches.append(
                 MaxPooling2D(pool[0], pool[1], name=f'{name}_Pool_{pool[0]}x{pool[0]}')
@@ -87,7 +86,7 @@ class ReductionBlock(tf.keras.Model):
         x = Concatenate(axis=3, name=f'{self.name}_Concatenate')(branches)
         return x
 
-def FacenetInception(path : str) -> tf.keras.Model :
+def FacenetInception() -> tf.keras.Model :
     model = tf.keras.models.Sequential([
         Input(shape=(160, 160, 3)),
         ConvBlock(32, 3, 2, 'valid', False, 'Conv2d_1'),
@@ -103,20 +102,20 @@ def FacenetInception(path : str) -> tf.keras.Model :
         tf.keras.Sequential([
             InceptionResnetBlock(
             branches=[
-                # branch0
+                # branch2
                 [
                     [32, 1, 1, 'same', False],
+                    [32, 3, 1, 'same', False],
+                    [32, 3, 1, 'same', False],
                 ],
                 # branch1
                 [
                     [32, 1, 1, 'same', False],
                     [32, 3, 1, 'same', False],
                 ],
-                # branch2
+                # branch0
                 [
                     [32, 1, 1, 'same', False],
-                    [32, 3, 1, 'same', False],
-                    [32, 3, 1, 'same', False],
                 ],
             ], dimension=256, scale=0.17, name=f'InceptionBlockA-{idx}')
             for idx in range(5)
@@ -125,16 +124,16 @@ def FacenetInception(path : str) -> tf.keras.Model :
         # # ReductionBlockA
         ReductionBlock(
             branches=[
-                # branch0
-                [
-                    [384, 3, 2, 'valid', False],
-                ],
                 # branch1
                 [
                     [192, 1, 1, 'same', False],
                     [192, 3, 1, 'same', False],
                     [256, 3, 2, 'valid', False],
-                ]
+                ],
+                # branch0
+                [
+                    [384, 3, 2, 'valid', False],
+                ],
             ], pool = [3, 2], name='RecutionBlockA'
         ),
 
@@ -142,15 +141,15 @@ def FacenetInception(path : str) -> tf.keras.Model :
         tf.keras.Sequential([
             InceptionResnetBlock(
             branches=[
-                # branch0
-                [
-                    [128, 1, 1, 'same', False],
-                ],
                 # branch1
                 [
                     [128, 1, 1, 'same', False],
                     [128, [1, 7], 1, 'same', False],
                     [128, [7, 1], 1, 'same', False],
+                ],
+                # branch0
+                [
+                    [128, 1, 1, 'same', False],
                 ],
             ], dimension=896, scale=0.1, name=f'InceptionBlockB-{idx}')
             for idx in range(10)
@@ -159,38 +158,38 @@ def FacenetInception(path : str) -> tf.keras.Model :
         # ReductionBlockB
         ReductionBlock(
             branches=[
-                # branch0
-                [
-                    [256, 1, 1, 'same', False],
-                    [384, 3, 2, 'valid', False],
-                ],
-                # branch1
-                [
-                    [256, 1, 1, 'same', False],
-                    [256, 3, 2, 'valid', False],
-                ],
                 # branch2
                 [
                     [256, 1, 1, 'same', False],
                     [256, 3, 1, 'same', False],
                     [256, 3, 2, 'valid', False],
                 ],
+                # branch1
+                [
+                    [256, 1, 1, 'same', False],
+                    [256, 3, 2, 'valid', False],
+                ],
+                # branch0
+                [
+                    [256, 1, 1, 'same', False],
+                    [384, 3, 2, 'valid', False],
+                ],
             ], pool = [3, 2], name='RecutionBlockB'
         ),
 
-        # # InceptionBlockC
+        # InceptionBlockC
         tf.keras.Sequential([
             InceptionResnetBlock(
             branches=[
-                # branch0
-                [
-                    [192, 1, 1, 'same', False],
-                ],
                 # branch1
                 [
                     [192, 1, 1, 'same', False],
                     [192, [1, 3], 1, 'same', False],
                     [192, [3, 1], 1, 'same', False],
+                ],
+                # branch0
+                [
+                    [192, 1, 1, 'same', False],
                 ],
             ], dimension=1792, scale=0.2, name=f'InceptionBlockC-{idx}')
             for idx in range(6)
@@ -203,19 +202,4 @@ def FacenetInception(path : str) -> tf.keras.Model :
         BatchNormalization(momentum=0.995, epsilon=0.001, scale=False, name='Bottleneck_BatchNorm'),
     ], name='facenet')
     logger.debug(model.summary())
-    logger.debug(f'loading weights from {path}')
-    model.load_weights(path)
     return model
-
-def get_embedding_model(model_cfg : dict ) -> tf.keras.Model :
-    if model_cfg['name'] == "FacenetInception_v2":
-        return FacenetInception(model_cfg['wts'])
-    else:
-        raise NotImplementedError
-
-if __name__ == '__main__':
-    import numpy as np
-    model = FacenetInception('facenet_inception.h5')
-    model.summary()
-    random_tensor = np.random.randn(1, 160, 160, 3)
-    print(model.predict(random_tensor).shape)

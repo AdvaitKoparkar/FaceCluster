@@ -3,11 +3,11 @@ sys.path.append('../embedding_indexer')
 
 import os
 import numpy as np
+import tensorflow as tf
 import matplotlib.pyplot as plt
 from sqlitedict import SqliteDict
 from src.fetcher import Fetcher
 from src.face_extractor import FaceExtractor
-from src.facenet import get_embedding_model
 from config.common_config import COMMON_CONFIG
 from config.fetcher_config import FETCHER_CONFIG
 from emb_utils import EmbeddingIndex
@@ -17,7 +17,7 @@ from src.general_utils import preprocess, draw_rectangle, crop
 class ImageSearch(object):
     def __init__(self, ):
         self.fetcher = Fetcher(FETCHER_CONFIG)
-        self.embedding_model = get_embedding_model(COMMON_CONFIG["embedding_model"])
+        self.embedding_model = tf.keras.models.load_model(COMMON_CONFIG['embedding_model']['wts'], safe_mode=False)
         self.fe = FaceExtractor()
         self.vector_db = EmbeddingIndex(**COMMON_CONFIG['ann_config'])
         self.vector_db.load_index(os.path.join(COMMON_CONFIG["root"], "data/photos_db_v20231217/FacenetInception_v2"))
@@ -30,8 +30,11 @@ class ImageSearch(object):
         search_results = []
         for face in faces:
             box = face['loc']
+            max_dim = max(box[2], box[3])
+            box[2], box[3] = max_dim, max_dim
             face_cropped = preprocess(crop(img, box), rows=COMMON_CONFIG['face_shape'][0], cols=COMMON_CONFIG['face_shape'][1])
             emb = self.embedding_model.predict(face_cropped[None,...], verbose=0)
+            emb /= np.linalg.norm(emb)
             dist, _, metadata = self.vector_db.search(emb, k)
             imgs = [None] * len(metadata[0])
             for _k in range(len(metadata[0])):
@@ -55,7 +58,7 @@ class ImageSearch(object):
 
 
 if __name__ == '__main__':
-    query = '/Users/advaitkoparkar/Documents/projects/FaceCluster/data/IMG20231231142101.jpg'
+    query = '/Users/advaitkoparkar/Documents/projects/FaceCluster/data/IMG20230806114934.jpeg'
     img = plt.imread(query)
     k = 3
     search_results = ImageSearch().search(img, k)
